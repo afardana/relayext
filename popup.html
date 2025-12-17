@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: sans-serif;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+      padding: 5px;
+    }
+
+    button {
+      width: 100%;
+      padding: 8px;
+      cursor: pointer;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    #stopBtn {
+      display: none;
+      background-color: #ffebee;
+      color: #c62828;
+      border: 1px solid #c62828;
+    }
+
+    #startBtn {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #2e7d32;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>Pionex Data Relay</h3>
+  <label>Target WebSocket URL:</label>
+  <input type="text" id="targetUrl" placeholder="ws://localhost:8080" />
+
+  <label>Filter (Keyword/Regex):</label>
+  <select id="urlSelect" style="width:100%; margin-bottom: 5px;">
+    <option value="">Select a detected URL...</option>
+  </select>
+  <input type="text" id="filterTerm" placeholder="or type manually here..." />
+
+  <button id="startBtn">Start Relaying</button>
+  <button id="stopBtn">Stop Relaying</button>
+
+  <div class="status" id="statusMsg">Status: Stopped</div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

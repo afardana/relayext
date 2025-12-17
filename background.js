@@ -3,6 +3,33 @@ let targetUrl = null;
 let isRunning = false;
 let messageQueue = [];
 
+// Badge counter - track messages per second
+let messageTimestamps = [];
+const RATE_WINDOW_MS = 2000; // 2-second rolling window
+
+function updateBadge() {
+    const now = Date.now();
+    // Remove timestamps older than the window
+    messageTimestamps = messageTimestamps.filter(ts => now - ts < RATE_WINDOW_MS);
+
+    // Calculate rate (messages per second)
+    const rate = messageTimestamps.length / (RATE_WINDOW_MS / 1000);
+    const displayRate = rate < 10 ? rate.toFixed(1) : Math.round(rate).toString();
+
+    if (isRunning && messageTimestamps.length > 0) {
+        chrome.action.setBadgeText({ text: displayRate });
+        chrome.action.setBadgeBackgroundColor({ color: '#4CAF50' });
+    } else if (isRunning) {
+        chrome.action.setBadgeText({ text: '0' });
+        chrome.action.setBadgeBackgroundColor({ color: '#9E9E9E' });
+    } else {
+        chrome.action.setBadgeText({ text: '' });
+    }
+}
+
+// Update badge every second
+setInterval(updateBadge, 1000);
+
 // Load settings on startup
 chrome.storage.local.get(['targetUrl', 'isRunning'], (result) => {
     if (result.targetUrl) targetUrl = result.targetUrl;
@@ -10,6 +37,7 @@ chrome.storage.local.get(['targetUrl', 'isRunning'], (result) => {
         isRunning = result.isRunning;
         if (isRunning && targetUrl) connectRelay();
     }
+    updateBadge();
 });
 
 // Watch for storage changes (settings updates)
@@ -20,33 +48,20 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         }
         if (changes.isRunning) {
             isRunning = changes.isRunning.newValue;
-            console.log('RelayExt: State changed to', isRunning ? 'RUNNING' : 'STOPPED');
             if (isRunning) {
                 connectRelay();
             } else {
                 disconnectRelay();
+                messageTimestamps = [];
             }
+            updateBadge();
         }
     }
 });
 
-let relayCount = 0;
-
-function updateBadge() {
-    if (isRunning) {
-        chrome.action.setBadgeText({ text: relayCount.toString() });
-        chrome.action.setBadgeBackgroundColor({ color: '#4CAF50' }); // Green
-    } else {
-        chrome.action.setBadgeText({ text: '' });
-    }
-}
-
 function connectRelay() {
     if (!targetUrl) return;
     if (relaySocket && (relaySocket.readyState === WebSocket.OPEN || relaySocket.readyState === WebSocket.CONNECTING)) return;
-
-    relayCount = 0; // Reset counter on new session
-    updateBadge();
 
     relaySocket = new WebSocket(targetUrl);
 
@@ -56,22 +71,18 @@ function connectRelay() {
         while (messageQueue.length > 0) {
             const msg = messageQueue.shift();
             relaySocket.send(msg);
-            relayCount++;
+            messageTimestamps.push(Date.now());
         }
-        updateBadge();
     };
 
     relaySocket.onclose = () => {
         console.log('RelayExt: Disconnected from target relay');
         relaySocket = null;
-        chrome.action.setBadgeText({ text: 'OFF' });
-        chrome.action.setBadgeBackgroundColor({ color: '#9E9E9E' });
+        // Optional: Auto-reconnect logic could go here
     };
 
     relaySocket.onerror = (err) => {
         console.error('RelayExt: Target relay error', err);
-        chrome.action.setBadgeText({ text: 'ERR' });
-        chrome.action.setBadgeBackgroundColor({ color: '#F44336' });
     };
 }
 
@@ -80,7 +91,6 @@ function disconnectRelay() {
         relaySocket.close();
         relaySocket = null;
     }
-    updateBadge();
 }
 
 // Receive messages from content script
@@ -92,8 +102,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         if (relaySocket && relaySocket.readyState === WebSocket.OPEN) {
             relaySocket.send(payload);
-            relayCount++;
-            updateBadge();
+            messageTimestamps.push(Date.now());
         } else {
             // Optionally buffer or drop. For now, let's buffer a few.
             if (messageQueue.length < 100) {
